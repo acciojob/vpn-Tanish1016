@@ -7,8 +7,8 @@ import com.driver.repository.ServiceProviderRepository;
 import com.driver.services.AdminService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import java.util.ArrayList;
-import java.util.Optional;
+
+import java.util.List;
 
 @Service
 public class AdminServiceImpl implements AdminService {
@@ -26,65 +26,36 @@ public class AdminServiceImpl implements AdminService {
         Admin admin = new Admin();
         admin.setUsername(username);
         admin.setPassword(password);
-        // Initialize the list to avoid null pointer issues
-        admin.setServiceProviders(new ArrayList<>());
-        admin = adminRepository1.save(admin);
+        adminRepository1.save(admin);
         return admin;
     }
 
     @Override
     public Admin addServiceProvider(int adminId, String providerName) {
-        Optional<Admin> adminOptional = adminRepository1.findById(adminId);
-        Admin admin = adminOptional.get();
-
-        ServiceProvider sp = new ServiceProvider();
-        sp.setName(providerName);
-        sp.setAdmin(admin);
-        // Initialize lists for countries, users and connections
-        sp.setCountryList(new ArrayList<>());
-        sp.setUsers(new ArrayList<>());
-        sp.setConnectionList(new ArrayList<>());
-
-        sp = serviceProviderRepository1.save(sp);
-
-        // Update the admin's list of service providers
-        if(admin.getServiceProviders() == null) {
-            admin.setServiceProviders(new ArrayList<>());
-        }
-        admin.getServiceProviders().add(sp);
-        admin = adminRepository1.save(admin);
+        Admin admin = adminRepository1.findById(adminId).orElseThrow(() -> new RuntimeException("Admin not found"));
+        ServiceProvider serviceProvider = new ServiceProvider();
+        serviceProvider.setName(providerName);
+        serviceProvider.setAdmin(admin);
+        admin.getServiceProviders().add(serviceProvider);
+        adminRepository1.save(admin);
         return admin;
     }
 
     @Override
     public ServiceProvider addCountry(int serviceProviderId, String countryName) throws Exception {
-        Optional<ServiceProvider> spOptional = serviceProviderRepository1.findById(serviceProviderId);
-        ServiceProvider sp = spOptional.get();
-        String targetCountry = countryName.toUpperCase();
-
-        CountryName countryEnum;
+        ServiceProvider serviceProvider = serviceProviderRepository1.findById(serviceProviderId).orElseThrow(() -> new RuntimeException("ServiceProvider not found"));
+        CountryName countryNameEnum;
         try {
-            countryEnum = CountryName.valueOf(targetCountry);
+            countryNameEnum = CountryName.valueOf(countryName.toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new Exception("Country not found");
         }
-
         Country country = new Country();
-        country.setCountryName(countryEnum);
-        country.setServiceProvider(sp);
-        // For admin-added country, user remains null
-        country.setUser(null);
-
-        // Add country to service provider’s country list
-        if(sp.getCountryList() == null) {
-            sp.setCountryList(new ArrayList<>());
-        }
-        sp.getCountryList().add(country);
-
-        // Save country and update service provider
-        countryRepository1.save(country);
-        serviceProviderRepository1.save(sp);
-        return sp;
+        country.setCountryName(countryNameEnum);
+        country.setCode(countryNameEnum.toCode());
+        country.setServiceProvider(serviceProvider);
+        serviceProvider.getCountryList().add(country);
+        serviceProviderRepository1.save(serviceProvider);
+        return serviceProvider;
     }
 }
-

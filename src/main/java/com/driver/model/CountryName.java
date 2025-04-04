@@ -1,3 +1,4 @@
+// CountryName.java
 package com.driver.model;
 
 public enum CountryName {
@@ -9,11 +10,11 @@ public enum CountryName {
 
     private final String code;
 
-    private CountryName(String s) {
-        code = s;
+    CountryName(String code) {
+        this.code = code;
     }
 
     public String toCode() {
-        return this.code;
+        return code;
     }
 }
