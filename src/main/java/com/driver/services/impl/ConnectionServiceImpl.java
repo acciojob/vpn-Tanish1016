@@ -7,8 +7,9 @@ import com.driver.repository.UserRepository;
 import com.driver.services.ConnectionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 @Service
 public class ConnectionServiceImpl implements ConnectionService {
@@ -21,53 +22,56 @@ public class ConnectionServiceImpl implements ConnectionService {
 
     @Override
     public User connect(int userId, String countryName) throws Exception {
-        User user = userRepository2.findById(userId).get();
-        if (user.getConnected() != null && user.getConnected()) {
+        Optional<User> userOptional = userRepository2.findById(userId);
+        User user = userOptional.get();
+
+        // If already connected, throw exception
+        if(user.getConnected() != null && user.getConnected()){
             throw new Exception("Already connected");
         }
-        // Validate and convert target country name
-        CountryName targetCountry;
-        try {
-            targetCountry = CountryName.valueOf(countryName.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new Exception("Country not found");
-        }
-        // If user is trying to connect to his original country, no need to connect
-        if (user.getOriginalCountry().getCountryName() == targetCountry) {
+
+        String targetCountry = countryName.toUpperCase();
+        // If the desired country is the same as the user's original country, do nothing
+        if(user.getOriginalCountry().getCountryName().name().equalsIgnoreCase(targetCountry)){
             return user;
         }
-        // Check if user is subscribed to any service provider
-        if (user.getServiceProviderList() == null || user.getServiceProviderList().isEmpty()) {
+
+        // Check among subscribed service providers for one that has the country available
+        List<ServiceProvider> providers = user.getServiceProviderList();
+        if(providers == null || providers.isEmpty()){
             throw new Exception("Unable to connect");
         }
-        // Find a service provider (with smallest id) that has the required country
+
         ServiceProvider chosenProvider = null;
-        for (ServiceProvider provider : user.getServiceProviderList()) {
-            if (provider.getCountryList() != null) {
-                for (Country country : provider.getCountryList()) {
-                    if (country.getCountryName() == targetCountry) {
-                        if (chosenProvider == null || provider.getId() < chosenProvider.getId()) {
-                            chosenProvider = provider;
+        for(ServiceProvider sp : providers) {
+            List<Country> countryList = sp.getCountryList();
+            if(countryList != null) {
+                for(Country c : countryList) {
+                    if(c.getCountryName().name().equalsIgnoreCase(targetCountry)){
+                        if(chosenProvider == null || sp.getId() < chosenProvider.getId()){
+                            chosenProvider = sp;
                         }
-                        break;
                     }
                 }
             }
         }
-        if (chosenProvider == null) {
+
+        if(chosenProvider == null) {
             throw new Exception("Unable to connect");
         }
-        // Create and save the connection
+
+        // Establish the connection by creating a Connection entity
         Connection connection = new Connection();
         connection.setUser(user);
         connection.setServiceProvider(chosenProvider);
         connectionRepository2.save(connection);
 
-        // Update user's connection status and masked IP format: "countryCode.serviceProviderId.userId"
+        // Update user's attributes to reflect connection
         user.setConnected(true);
-        String maskedIp = targetCountry.toCode() + "." + chosenProvider.getId() + "." + user.getId();
+        CountryName cn = CountryName.valueOf(targetCountry);
+        String maskedIp = cn.toCode() + "." + chosenProvider.getId() + "." + user.getId();
         user.setMaskedIp(maskedIp);
-        if (user.getConnectionList() == null) {
+        if(user.getConnectionList() == null) {
             user.setConnectionList(new ArrayList<>());
         }
         user.getConnectionList().add(connection);
@@ -77,10 +81,14 @@ public class ConnectionServiceImpl implements ConnectionService {
 
     @Override
     public User disconnect(int userId) throws Exception {
-        User user = userRepository2.findById(userId).get();
-        if (user.getConnected() == null || !user.getConnected()) {
+        Optional<User> userOptional = userRepository2.findById(userId);
+        User user = userOptional.get();
+
+        if(user.getConnected() == null || !user.getConnected()){
             throw new Exception("Already disconnected");
         }
+
+        // Disconnect the user by resetting the connection attributes
         user.setConnected(false);
         user.setMaskedIp(null);
         userRepository2.save(user);
@@ -91,70 +99,46 @@ public class ConnectionServiceImpl implements ConnectionService {
     public User communicate(int senderId, int receiverId) throws Exception {
         User sender = userRepository2.findById(senderId).get();
         User receiver = userRepository2.findById(receiverId).get();
+        String receiverCurrentCountry = "";
 
-        // Determine receiver's current country:
-        // If receiver is connected, parse the maskedIp; otherwise, use the original country.
-        CountryName receiverCountry;
-        if (receiver.getConnected() != null && receiver.getConnected()) {
+        // Determine receiver's current country
+        if(receiver.getConnected() != null && receiver.getConnected()){
+            // If connected, extract the country code from maskedIp (format: code.spId.userId)
             String maskedIp = receiver.getMaskedIp();
-            if (maskedIp == null || maskedIp.isEmpty()) {
-                receiverCountry = receiver.getOriginalCountry().getCountryName();
-            } else {
-                String code = maskedIp.split("\\.")[0];
-                receiverCountry = null;
-                for (CountryName cn : CountryName.values()) {
-                    if (cn.toCode().equals(code)) {
-                        receiverCountry = cn;
-                        break;
-                    }
-                }
-                if (receiverCountry == null) {
-                    receiverCountry = receiver.getOriginalCountry().getCountryName();
+            String[] parts = maskedIp.split("\\.");
+            String countryCode = parts[0];
+            // Map the code back to the enum value
+            for(CountryName cn : CountryName.values()){
+                if(cn.toCode().equals(countryCode)){
+                    receiverCurrentCountry = cn.name();
+                    break;
                 }
             }
+            if(receiverCurrentCountry.equals("")){
+                throw new Exception("Cannot establish communication");
+            }
         } else {
-            receiverCountry = receiver.getOriginalCountry().getCountryName();
+            // If not connected, use original country
+            receiverCurrentCountry = receiver.getOriginalCountry().getCountryName().name();
         }
 
-        // If sender's original country is same as receiver's current country, communication can happen directly.
-        if (sender.getOriginalCountry().getCountryName() == receiverCountry) {
+        // If sender's original country is same as receiver's current country, communication is possible
+        String senderOriginalCountry = sender.getOriginalCountry().getCountryName().name();
+        if(senderOriginalCountry.equalsIgnoreCase(receiverCurrentCountry)){
             return sender;
         } else {
-            // Otherwise, try to connect sender to the receiver's country using a subscribed service provider.
-            if (sender.getServiceProviderList() == null || sender.getServiceProviderList().isEmpty()) {
-                throw new Exception("Cannot establish communication");
-            }
-            ServiceProvider chosenProvider = null;
-            for (ServiceProvider provider : sender.getServiceProviderList()) {
-                if (provider.getCountryList() != null) {
-                    for (Country country : provider.getCountryList()) {
-                        if (country.getCountryName() == receiverCountry) {
-                            if (chosenProvider == null || provider.getId() < chosenProvider.getId()) {
-                                chosenProvider = provider;
-                            }
-                            break;
-                        }
-                    }
+            // Otherwise, try to connect sender to the receiver's country
+            try {
+                // In case sender is already connected (to a different country), disconnect first
+                if(sender.getConnected() != null && sender.getConnected()){
+                    sender = disconnect(senderId);
                 }
-            }
-            if (chosenProvider == null) {
+                sender = connect(senderId, receiverCurrentCountry);
+            } catch(Exception e) {
                 throw new Exception("Cannot establish communication");
             }
-            // Create and save a connection for the sender
-            Connection connection = new Connection();
-            connection.setUser(sender);
-            connection.setServiceProvider(chosenProvider);
-            connectionRepository2.save(connection);
-
-            sender.setConnected(true);
-            String maskedIp = receiverCountry.toCode() + "." + chosenProvider.getId() + "." + sender.getId();
-            sender.setMaskedIp(maskedIp);
-            if (sender.getConnectionList() == null) {
-                sender.setConnectionList(new ArrayList<>());
-            }
-            sender.getConnectionList().add(connection);
-            userRepository2.save(sender);
             return sender;
         }
     }
 }
+

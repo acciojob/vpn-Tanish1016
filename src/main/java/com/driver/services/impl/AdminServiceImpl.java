@@ -1,17 +1,14 @@
 package com.driver.services.impl;
 
-import com.driver.model.Admin;
-import com.driver.model.Country;
-import com.driver.model.CountryName;
-import com.driver.model.ServiceProvider;
+import com.driver.model.*;
 import com.driver.repository.AdminRepository;
 import com.driver.repository.CountryRepository;
 import com.driver.repository.ServiceProviderRepository;
 import com.driver.services.AdminService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
+import java.util.Optional;
 
 @Service
 public class AdminServiceImpl implements AdminService {
@@ -29,43 +26,65 @@ public class AdminServiceImpl implements AdminService {
         Admin admin = new Admin();
         admin.setUsername(username);
         admin.setPassword(password);
+        // Initialize the list to avoid null pointer issues
         admin.setServiceProviders(new ArrayList<>());
-        adminRepository1.save(admin);
+        admin = adminRepository1.save(admin);
         return admin;
     }
 
     @Override
     public Admin addServiceProvider(int adminId, String providerName) {
-        Admin admin = adminRepository1.findById(adminId).get();
-        ServiceProvider serviceProvider = new ServiceProvider();
-        serviceProvider.setName(providerName);
-        serviceProvider.setAdmin(admin);
-        serviceProvider.setCountryList(new ArrayList<>());
-        serviceProvider.setConnectionList(new ArrayList<>());
-        serviceProvider.setUsers(new ArrayList<>());
-        admin.getServiceProviders().add(serviceProvider);
-        serviceProviderRepository1.save(serviceProvider);
-        adminRepository1.save(admin);
+        Optional<Admin> adminOptional = adminRepository1.findById(adminId);
+        Admin admin = adminOptional.get();
+
+        ServiceProvider sp = new ServiceProvider();
+        sp.setName(providerName);
+        sp.setAdmin(admin);
+        // Initialize lists for countries, users and connections
+        sp.setCountryList(new ArrayList<>());
+        sp.setUsers(new ArrayList<>());
+        sp.setConnectionList(new ArrayList<>());
+
+        sp = serviceProviderRepository1.save(sp);
+
+        // Update the admin's list of service providers
+        if(admin.getServiceProviders() == null) {
+            admin.setServiceProviders(new ArrayList<>());
+        }
+        admin.getServiceProviders().add(sp);
+        admin = adminRepository1.save(admin);
         return admin;
     }
 
     @Override
     public ServiceProvider addCountry(int serviceProviderId, String countryName) throws Exception {
-        // Validate country name (only IND, USA, AUS, CHI, JPN are allowed)
-        CountryName cName;
+        Optional<ServiceProvider> spOptional = serviceProviderRepository1.findById(serviceProviderId);
+        ServiceProvider sp = spOptional.get();
+        String targetCountry = countryName.toUpperCase();
+
+        CountryName countryEnum;
         try {
-            cName = CountryName.valueOf(countryName.toUpperCase());
+            countryEnum = CountryName.valueOf(targetCountry);
         } catch (IllegalArgumentException e) {
             throw new Exception("Country not found");
         }
-        ServiceProvider serviceProvider = serviceProviderRepository1.findById(serviceProviderId).get();
+
         Country country = new Country();
-        country.setCountryName(cName);
-        country.setServiceProvider(serviceProvider);
-        country.setUser(null); // For admin added countries, user is null
+        country.setCountryName(countryEnum);
+        country.setServiceProvider(sp);
+        // For admin-added country, user remains null
+        country.setUser(null);
+
+        // Add country to service provider’s country list
+        if(sp.getCountryList() == null) {
+            sp.setCountryList(new ArrayList<>());
+        }
+        sp.getCountryList().add(country);
+
+        // Save country and update service provider
         countryRepository1.save(country);
-        serviceProvider.getCountryList().add(country);
-        serviceProviderRepository1.save(serviceProvider);
-        return serviceProvider;
+        serviceProviderRepository1.save(sp);
+        return sp;
     }
 }
+

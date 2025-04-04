@@ -12,19 +12,38 @@ public class Country {
     @Enumerated(EnumType.STRING)
     private CountryName countryName;
 
-    @OneToOne
-    private User user; // For user original country; null when added under a service provider
-
+    // For countries added under a service provider
     @ManyToOne
     private ServiceProvider serviceProvider;
 
-    // Getters and setters
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
-    public CountryName getCountryName() { return countryName; }
-    public void setCountryName(CountryName countryName) { this.countryName = countryName; }
-    public User getUser() { return user; }
-    public void setUser(User user) { this.user = user; }
-    public ServiceProvider getServiceProvider() { return serviceProvider; }
-    public void setServiceProvider(ServiceProvider serviceProvider) { this.serviceProvider = serviceProvider; }
+    // For user’s original country
+    @OneToOne
+    private User user;
+
+    // Getters and Setters
+
+    public int getId() {
+        return id;
+    }
+    public void setId(int id) {
+        this.id = id;
+    }
+    public CountryName getCountryName() {
+        return countryName;
+    }
+    public void setCountryName(CountryName countryName) {
+        this.countryName = countryName;
+    }
+    public ServiceProvider getServiceProvider() {
+        return serviceProvider;
+    }
+    public void setServiceProvider(ServiceProvider serviceProvider) {
+        this.serviceProvider = serviceProvider;
+    }
+    public User getUser() {
+        return user;
+    }
+    public void setUser(User user) {
+        this.user = user;
+    }
 }

@@ -16,11 +16,24 @@ public class Connection {
     @JoinColumn
     private ServiceProvider serviceProvider;
 
-    // Getters and setters
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
-    public User getUser() { return user; }
-    public void setUser(User user) { this.user = user; }
-    public ServiceProvider getServiceProvider() { return serviceProvider; }
-    public void setServiceProvider(ServiceProvider serviceProvider) { this.serviceProvider = serviceProvider; }
+    // Getters and Setters
+
+    public int getId() {
+        return id;
+    }
+    public void setId(int id) {
+        this.id = id;
+    }
+    public User getUser() {
+        return user;
+    }
+    public void setUser(User user) {
+        this.user = user;
+    }
+    public ServiceProvider getServiceProvider() {
+        return serviceProvider;
+    }
+    public void setServiceProvider(ServiceProvider serviceProvider) {
+        this.serviceProvider = serviceProvider;
+    }
 }
